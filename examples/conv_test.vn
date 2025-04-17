@@ -1,0 +1,47 @@
+#pragma total_pes=32
+#pragma pes_per_cluster=2
+#pragma EMBRASSINGLY_SPLIT=16
+#pragma minimum_pes_required=2
+
+
+
+
+int x1[3][36][36] => x18, [d, x+i, y+j  ]
+int x2[32][3][5][5] => x19, [n, d, i, j]
+int x3[3][32][32] => x20, [n, x, y]
+
+&x1 = 2800
+&x2 = 84
+&x3 = 7000
+
+main:
+  for n(x10) = 32:
+    for x(x11) = 32:
+      for y(x12) = 32:
+        for d(x13) = 3:
+          for i(x14) = 5:
+            for j(x15) = 5:
+              pe_0:
+                addi x1, x0, 0
+                load x1[d][x+i][y+j]
+                mul x1, x1, x28
+                add x3, x1, x28
+                store x3[n][x][y]
+              end_pe0
+
+              pe_1:
+                addi x1, x0, 0
+                load x2[n][d][i][j]
+                load x3[n][x][y]
+                nop
+                nop
+              end_pe1
+
+            endfor
+          endfor
+        endfor 
+      endfor  
+    endfor
+  endfor 
+endmain
+

@@ -1,0 +1,71 @@
+#pragma total_pes=16
+#pragma pes_per_cluster=16
+#pragma EMBRASSINGLY_SPLIT=4
+#pragma minimum_pes_required=2
+
+&x1 = 200
+&x2 = 20000
+
+int x1[64] => x18
+int x2[64] => x19
+
+main:
+  for i(x10) = 64:
+    for j(x11) = 64:
+      pe_0:
+        load x1[i]
+        mul x1, x1, x1
+        store x1[i]
+        add x1, x1, 10  
+        add x1, x1, 10  
+        call foo
+        add x1, x1, 10  
+        add x1, x1, 10  
+      end_pe0
+
+      pe_1:
+        load x2[i]
+        add x2, x2, x2
+        store x2[i]
+        add x2, x2, 20  
+        add x1, x1, 10  
+        call foo
+        add x1, x1, 10 
+        add x1, x1, 10 
+    endfor
+  endfor 
+
+  for i(x10) = 64:
+    for j(x11) = 64:
+      pe_0:
+        mul x1, x1, x1 
+      end_pe0
+
+      pe_1:
+        add x2, x2, x2
+    endfor
+  endfor  
+  
+  for i(x10) = 64:
+    for j(x11) = 64:
+      pe_0:
+        mul x1, x1, x1
+      end_pe0
+
+      pe_1:
+        add x2, x2, x2
+    endfor
+  endfor  
+
+endmain
+
+
+function foo @700:
+  pe_0:
+    mul x5, x5, x1
+    mul x5, x5, x1
+  end_pe0
+  pe_1:
+    add x6, x7, x8
+    add x6, x7, x8
+end

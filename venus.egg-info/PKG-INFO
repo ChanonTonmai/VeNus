@@ -1,0 +1,60 @@
+Metadata-Version: 2.1
+Name: venus
+Version: 0.1.0
+Summary: A DSL interpreter for RISC-V CGRA FPGA
+Home-page: https://github.com/yourusername/your-repo
+Author: K. Chanon
+Author-email: tonmai12369@gmail.com
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Requires-Dist: pyyaml
+
+# DSL Interpreter for RISC-V CGRA FPGA
+
+A Python-based DSL interpreter that converts domain-specific language code into YAML configuration for RISC-V CGRA FPGA.
+
+## Installation
+
+You can install the package using pip:
+
+```bash
+pip install -e .
+```
+
+This will install the package in "editable" mode, which is useful during development.
+
+## Usage
+
+After installation, you can use the interpreter from the command line:
+
+```bash
+dsl_interpret input.dsl -o output.yaml
+```
+
+### Arguments
+
+- `input_file`: Path to the input DSL file (required)
+- `-o, --output`: Path to the output YAML file (optional, defaults to 'output.yaml')
+
+### Example
+
+```bash
+dsl_interpret program.dsl -o config.yaml
+```
+
+## Development
+
+To modify the package:
+
+1. Make your changes to the source files
+2. Reinstall the package:
+   ```bash
+   pip install -e .
+   ```
+
+## License
+
+MIT License 
