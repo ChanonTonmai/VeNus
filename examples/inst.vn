@@ -1,0 +1,58 @@
+#pragma total_pes=2
+#pragma pes_per_cluster=2
+#pragma minimum_pes_required=1
+
+int x1  => x18  
+int x2  => x18
+int x3  => x18 
+
+&x3 = 400
+
+main:
+    pe_0
+        addi x1,  x0, -100
+        store x1, 4
+        addi x2,  x0, 200
+        store x2, 8
+        add  x3,  x1, x2
+        store x3, 12
+        sub  x3,  x1, x2
+        store x3, 16
+        sll  x3,  x1, x2
+        store x3, 20
+        slt  x3,  x1, x2
+        store x3, 24
+        sltu  x3,  x1, x2
+        store x3, 28
+        xor  x3,  x1, x2
+        store x3, 32
+        or   x3,  x1, x2
+        store x3, 36
+        and  x3,  x1, x2
+        store x3, 40
+        srl  x3,  x1, x2
+        store x3, 44
+        sra  x3, x1, x2
+        store x3, 48
+        slli  x3, x1, 20
+        store x3, 52
+        srli  x3, x1, 20
+        store x3, 56
+        srai  x3, x1, 20
+        store x3, 60
+        mul  x3, x1, x2
+        store x3, 64
+
+        // I-type 
+        slti x3, x1, -200
+        store x3, 68
+        sltiu x3, x1, -200
+        store x3, 72
+        xori x3, x1, -200
+        store x3, 76
+        ori x3, x1, -200
+        store x3, 80
+        andi x3, x1, -200
+        store x3, 84
+    end_pe0
+endmain

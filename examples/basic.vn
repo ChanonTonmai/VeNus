@@ -13,7 +13,7 @@ main:
   for i(x10) = 64:
     for j(x11) = 64:
       pe_0:
-        load x1[i]
+        load x1
         mul x1, x1, x1
         store x1[i]
         add x1, x1, 10  

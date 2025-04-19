@@ -24,11 +24,22 @@ python venus/cli/main.py input.dsl -o output.yaml
 
 1. Create a DSL file (e.g., `test.vn`):
 ```dsl
-#pragma total_pes=4
-int A[4][4] => x18, [i,j]
-for i(0) = 0:4:
-    load A[i][0]
-endfor
+#pragma total_pes=32
+#pragma pes_per_cluster=2
+#pragma EMBRASSINGLY_SPLIT=16
+#pragma minimum_pes_required=2
+
+int x1[4][4] => x18, [i,j]
+main: 
+    for i(x10) = 4:
+        for j(x11) = 4:
+            pe_0:
+                load x1[i][j]
+                addi x1, x2, 5
+            end_pe0
+        endfor
+    endfor
+endmain
 ```
 
 2. Run Venus:

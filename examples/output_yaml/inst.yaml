@@ -1,0 +1,238 @@
+mem_config:
+  x18: 400
+  x19: null
+  x20: null
+  x21: null
+  x22: null
+  x23: null
+  x24: null
+  x25: null
+hardware_config:
+  total_pes: 2
+  clusters:
+    count: 1
+    pes_per_cluster: 2
+  psrf_mem_offset:
+    x18_offset: null
+    x19_offset: null
+    x20_offset: null
+    x21_offset: null
+    x22_offset: null
+    x23_offset: null
+    x24_offset: null
+    x25_offset: null
+scheduling:
+  minimum_pes_required: 1
+  pe_assignments:
+  - pe_id: 0
+    instructions:
+    - operation: ADDI
+      rd: x1
+      ra1: x0
+      imm: '-100'
+      format: i-type
+    - operation: sw
+      ra1: x1
+      base_address: x18
+      format: mem-type
+      offset: 4
+    - operation: ADDI
+      rd: x2
+      ra1: x0
+      imm: '200'
+      format: i-type
+    - operation: sw
+      ra1: x2
+      base_address: x18
+      format: mem-type
+      offset: 8
+    - operation: ADD
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 12
+    - operation: SUB
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 16
+    - operation: SLL
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 20
+    - operation: SLT
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 24
+    - operation: SLTU
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 28
+    - operation: XOR
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 32
+    - operation: OR
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 36
+    - operation: AND
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 40
+    - operation: SRL
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 44
+    - operation: SRA
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 48
+    - operation: SLLI
+      rd: x3
+      ra1: x1
+      imm: '20'
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 52
+    - operation: SRLI
+      rd: x3
+      ra1: x1
+      imm: '20'
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 56
+    - operation: SRAI
+      rd: x3
+      ra1: x1
+      imm: '20'
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 60
+    - operation: MUL
+      rd: x3
+      ra1: x1
+      ra2: x2
+      format: r-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 64
+    - operation: SLTI
+      rd: x3
+      ra1: x1
+      imm: '-200'
+      format: i-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 68
+    - operation: SLTIU
+      rd: x3
+      ra1: x1
+      imm: '-200'
+      format: i-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 72
+    - operation: XORI
+      rd: x3
+      ra1: x1
+      imm: '-200'
+      format: i-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 76
+    - operation: ORI
+      rd: x3
+      ra1: x1
+      imm: '-200'
+      format: i-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 80
+    - operation: ANDI
+      rd: x3
+      ra1: x1
+      imm: '-200'
+      format: i-type
+    - operation: sw
+      ra1: x3
+      base_address: x18
+      format: mem-type
+      offset: 84

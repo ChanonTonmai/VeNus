@@ -2,6 +2,9 @@ import yaml
 import math
 import re
 from copy import deepcopy
+import argparse
+import sys
+import os
 
 class DSLCompiler:
     def __init__(self):
@@ -58,24 +61,35 @@ class DSLCompiler:
         decl_part = parts[0].strip()
         index_spec = parts[1].strip() if len(parts) > 1 else None
         
-        # Parse the variable declaration part
-        match = re.match(r"int\s+(\w+)\[((?:\d+\]\[)*\d+)\]\s*=>\s*(x\d+)", decl_part)
-        if not match:
-            raise ValueError(f"Invalid declaration format: {line}")
-        
-        varname, dim_str, reg = match.groups()
-        dims = [int(d) for d in dim_str.split("][")]
-        
-        # Parse the index specification if present
-        indices = []
-        if index_spec:
-            # Remove brackets and split by comma
-            index_spec = index_spec.strip("[]")
-            indices = [idx.strip() for idx in index_spec.split(",")]
+        # Check if it's an array declaration (contains [])
+        if '[' in decl_part:
+            # Parse array declaration
+            match = re.match(r"int\s+(\w+)\[((?:\d+\]\[)*\d+)\]\s*=>\s*(x\d+)", decl_part)
+            if not match:
+                raise ValueError(f"Invalid array declaration format: {line}")
             
-            # Validate that number of indices matches number of dimensions
-            if len(indices) != len(dims):
-                raise ValueError(f"Number of indices ({len(indices)}) does not match number of dimensions ({len(dims)}) in {line}")
+            varname, dim_str, reg = match.groups()
+            dims = [int(d) for d in dim_str.split("][")]
+            
+            # Parse the index specification if present
+            indices = []
+            if index_spec:
+                # Remove brackets and split by comma
+                index_spec = index_spec.strip("[]")
+                indices = [idx.strip() for idx in index_spec.split(",")]
+                
+                # Validate that number of indices matches number of dimensions
+                if len(indices) != len(dims):
+                    raise ValueError(f"Number of indices ({len(indices)}) does not match number of dimensions ({len(dims)}) in {line}")
+        else:
+            # Parse single variable declaration
+            match = re.match(r"int\s+(\w+)\s*=>\s*(x\d+)", decl_part)
+            if not match:
+                raise ValueError(f"Invalid variable declaration format: {line}")
+            
+            varname, reg = match.groups()
+            dims = [1]  # Single variable has dimension 1
+            indices = ['0']  # Single variable has index 0
         
         # Store the variable information
         self.variable_map[varname] = {
@@ -146,11 +160,21 @@ class DSLCompiler:
         print(f"Debug - Parsing load instruction: '{line}'")  # Debug print
         indices_is_eq = False
         line = line.replace("load", "").strip()
-        parts = line.split("[", 1)
-        var = parts[0].strip()
         
-        if len(parts) > 1:
-            indices = [idx.strip("]") for idx in parts[1].split("][")]
+        # Split into variable part and offset part
+        parts = line.split(",", 1)
+        var_part = parts[0].strip()
+        offset = int(parts[1].strip()) if len(parts) > 1 else 0
+        
+        # Split variable name and indices
+        var_parts = var_part.split("[", 1)
+        var = var_parts[0].strip()
+        
+        # Check if it's an array or single variable
+        is_array = len(var_parts) > 1
+        
+        if is_array:
+            indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
             group_id = 0  # Counter for group IDs
@@ -182,8 +206,6 @@ class DSLCompiler:
         else:
             print(f"Debug - Load variable: {var}, indices: {indices}")  # Debug print
         
-        
-        
         # For function parameters, use the parameter name directly
         if is_function:
             reg = var
@@ -191,24 +213,34 @@ class DSLCompiler:
             # For main program variables, use the base register
             reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
             
-        if indices_is_eq:
-            psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-            coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
-            coeffs += [0] * (6 - len(coeffs))
+        if is_array:
+            if indices_is_eq:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            else:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            
+            instruction = {
+                "operation": "psrf.lw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "psrf-mem-type",
+                "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
+                "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
+                "coefficients": {f"c{i}": coeffs[i] for i in range(6)},
+                "offset": offset
+            }
         else:
-            psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-            coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
-            coeffs += [0] * (6 - len(coeffs))   
-        
-        instruction = {
-            "operation": "psrf.lw",
-            "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
-            "base_address": reg,
-            "format": "psrf-mem-type",
-            "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
-            "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
-            "coefficients": {f"c{i}": coeffs[i] for i in range(6)}
-        }
+            instruction = {
+                "operation": "lw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "mem-type",
+                "offset": offset
+            }
         
         if is_function:
             print(f"Debug - Adding load instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
@@ -220,19 +252,22 @@ class DSLCompiler:
     def _parse_store(self, line, is_function=False):
         print(f"Debug - Parsing store instruction: '{line}'")  # Debug print
         line = line.replace("store", "").strip()
-        parts = line.split("[", 1)
-        var = parts[0].strip()
+        
+        # Split into variable part and offset part
+        parts = line.split(",", 1)
+        var_part = parts[0].strip()
+        offset = int(parts[1].strip()) if len(parts) > 1 else 0
+        
+        # Split variable name and indices
+        var_parts = var_part.split("[", 1)
+        var = var_parts[0].strip()
+        
+        # Check if it's an array or single variable
+        is_array = len(var_parts) > 1
         indices_is_eq = False
 
-        # For function parameters, use the parameter name directly
-        if is_function:
-            reg = var
-        else:
-            # For main program variables, use the base register
-            reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
-            
-        if len(parts) > 1:
-            indices = [idx.strip("]") for idx in parts[1].split("][")]
+        if is_array:
+            indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
             group_id = 0  # Counter for group IDs
@@ -264,8 +299,6 @@ class DSLCompiler:
         else:
             print(f"Debug - Store variable: {var}, indices: {indices}")  # Debug print
         
-        
-        
         # For function parameters, use the parameter name directly
         if is_function:
             reg = var
@@ -273,26 +306,34 @@ class DSLCompiler:
             # For main program variables, use the base register
             reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
             
-        if indices_is_eq:
-            psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-            coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
-            coeffs += [0] * (6 - len(coeffs))
+        if is_array:
+            if indices_is_eq:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            else:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            
+            instruction = {
+                "operation": "psrf.sw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "psrf-mem-type",
+                "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
+                "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
+                "coefficients": {f"c{i}": coeffs[i] for i in range(6)},
+                "offset": offset
+            }
         else:
-            psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-            coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
-            coeffs += [0] * (6 - len(coeffs))   
-        
-
-        
-        instruction = {
-            "operation": "psrf.sw",
-            "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
-            "base_address": reg,
-            "format": "psrf-mem-type",
-            "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
-            "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
-            "coefficients": {f"c{i}": coeffs[i] for i in range(6)}
-        }
+            instruction = {
+                "operation": "sw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "mem-type",
+                "offset": offset
+            }
         
         if is_function:
             print(f"Debug - Adding store instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
@@ -300,6 +341,7 @@ class DSLCompiler:
         else:
             print(f"Debug - Adding store instruction to main program for PE {self.current_pe}")  # Debug print
             self.instruction_template[self.current_pe].append(instruction)
+
     def _parse_nop(self, line):
         print(f"Debug - Parsing nop instruction: '{line}'")  # Debug print
         instruction = {
@@ -309,29 +351,52 @@ class DSLCompiler:
             "format": "nop-type"
         }
         self.instruction_template[self.current_pe].append(instruction)
-    def _parse_compute(self, line, is_function=False):
+        
+    def _parse_instruction(self, line):
         print(f"Debug - Parsing compute instruction: '{line}'")  # Debug print
-        op, args = line.split(" ", 1)
-        args = [arg.strip() for arg in args.split(",")]
-        if len(args) != 3:
-            raise ValueError(f"Invalid number of arguments for {op} operation: {line}. Expected 3 arguments (rd,ra1,ra2)")
-        
-        rd, ra1, ra2 = args
-        instruction = {
-            "operation": op.upper(),
-            "rd": rd,
-            "ra1": ra1,
-            "ra2": ra2,
-            "format": "r-type"
-        }
-        
-        if is_function:
-            print(f"Debug - Adding compute instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
-            self.functions[self.current_function]["instructions"][self.current_pe].append(instruction)
-        else:
-            print(f"Debug - Adding compute instruction to main program for PE {self.current_pe}")  # Debug print
-            self.instruction_template[self.current_pe].append(instruction)
+        if line.startswith("add") or line.startswith("sub") or line.startswith("mul") or line.startswith("div") or \
+        line.startswith("sll") or line.startswith("srl") or line.startswith("sra") or line.startswith("xor") or \
+        line.startswith("or") or line.startswith("and") or line.startswith("srli") or line.startswith("srai") or \
+        line.startswith("slt") or  line.startwith("slli")  or                                                  \
+        line.startwith("addi") or line.startwith("subi") or line.startwith("slt") or line.startwith("sltu") or \
+        line.startwith("xori") or line.startwith("ori") or line.startwith("andi"): 
+            
+            op, args = line.split(" ", 1)
+            args = [arg.strip() for arg in args.split(",")]
 
+            if len(args) == 2:
+                rd, ra1 = args
+                ra2 = 0
+            else:
+                rd, ra1, ra2 = args
+            
+            if 'i' in ''.join(op):
+                if op.startswith("slli") or op.startswith("srli") or op.startswith("srai"):
+                    instruction = {
+                    "operation": op.upper(),
+                    "rd": rd,
+                    "ra1": ra1,
+                    "imm": ra2,
+                    "format": "r-type"  
+                    }
+                else:
+                    instruction = {
+                    "operation": op.upper(),
+                    "rd": rd,
+                    "ra1": ra1,
+                    "imm": ra2,
+                    "format": "i-type"  
+                    }
+            else:
+                instruction = {
+                    "operation": op.upper(),
+                    "rd": rd,
+                    "ra1": ra1,
+                    "ra2": ra2,
+                    "format": "r-type"  
+                }
+            self.instruction_template[self.current_pe].append(instruction)
+        
     def _parse_function_call(self, line):
         # Parse function call like "call foo"
         parts = line.split()
@@ -512,6 +577,8 @@ class DSLCompiler:
             line = line.strip()
             if not line:
                 continue
+            elif line.startswith("//"):
+                continue
             elif line.startswith("#"):
                 self.parse_pragma(line)
                 continue
@@ -588,13 +655,15 @@ class DSLCompiler:
                     elif line.startswith("store"):
                         self._parse_store(line)
                     elif line.startswith("mul") or line.startswith("add"):
-                        self._parse_compute(line)
+                        self._parse_instruction(line)
                     elif line.startswith("goto"):
                         self._parse_goto(line)
                     elif line.startswith("call"):  # Function call
                         self._parse_function_call(line)
                     elif line.startswith("nop"):
                         self._parse_nop(line)
+                    else: 
+                        self._parse_instruction(line)
                     # Increment PC only for the current PE
                     self.pe_pc[self.current_pe] += 1
                 elif self.current_function is not None:
@@ -612,7 +681,7 @@ class DSLCompiler:
                         elif line.startswith("store"):
                             self._parse_store(line, is_function=True)
                         elif line.startswith("mul") or line.startswith("add"):
-                            self._parse_compute(line, is_function=True)
+                            self._parse_instruction(line, is_function=True)
                         elif line.startswith("goto"):
                             self._parse_goto(line, is_function=True)
                         elif line.startswith("nop"):
@@ -625,7 +694,7 @@ class DSLCompiler:
                     elif line.startswith("store"):
                         self._parse_store(line)
                     elif line.startswith("mul") or line.startswith("add"):
-                        self._parse_compute(line)
+                        self._parse_instruction(line)
                     elif line.startswith("goto"):
                         self._parse_goto(line)
                     elif line.startswith("call"):  # Function call
@@ -634,4 +703,3 @@ class DSLCompiler:
                     self.pe_pc[self.current_pe] += 1
 
         return self.build_yaml()
-    
