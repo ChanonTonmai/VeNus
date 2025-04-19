@@ -156,6 +156,100 @@ class DSLCompiler:
         if len(self.loop_stack) > 1:
             self.nested_loop_pc = self.pc
 
+    def _parse_loadbyte(self, line, is_function=False):
+        print(f"Debug - Parsing load instruction: '{line}'")  # Debug print
+        indices_is_eq = False
+        line = line.replace("loadbyte", "").strip()
+        
+        # Split into variable part and offset part
+        parts = line.split(",", 1)
+        var_part = parts[0].strip()
+        offset = int(parts[1].strip()) if len(parts) > 1 else 0
+        
+        # Split variable name and indices
+        var_parts = var_part.split("[", 1)
+        var = var_parts[0].strip()
+        
+        # Check if it's an array or single variable
+        is_array = len(var_parts) > 1
+        
+        if is_array:
+            indices = [idx.strip("]") for idx in var_parts[1].split("][")]
+            indices_has_eq = []
+            index_groups = {}  # Dictionary to store index groups
+            group_id = 0  # Counter for group IDs
+            
+            for idx in indices:
+                if '+' in idx:
+                    # Split on '+' and add both parts
+                    parts = idx.split('+')
+                    group_indices = [p.strip() for p in parts]
+                    indices_has_eq.extend(group_indices)
+                    indices_is_eq = True
+                    
+                    # Add all indices in this group to the same group
+                    for group_idx in group_indices:
+                        index_groups[group_idx] = group_id
+                    group_id += 1
+                else:
+                    indices_has_eq.append(idx)
+                    # Single index gets its own group
+                    index_groups[idx] = group_id
+                    group_id += 1
+        else:
+            indices = []
+            indices_has_eq = []
+            index_groups = {}
+        
+        if indices_is_eq:
+            print(f"Debug - Load variable: {var}, indices: {indices_has_eq}, index groups: {index_groups}")  # Debug print
+        else:
+            print(f"Debug - Load variable: {var}, indices: {indices}")  # Debug print
+        
+        # For function parameters, use the parameter name directly
+        if is_function:
+            reg = var
+        else:
+            # For main program variables, use the base register
+            reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
+            
+        if is_array:
+            if indices_is_eq:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            else:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            
+            instruction = {
+                "operation": "psrf.lb",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "psrf-mem-type",
+                "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
+                "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
+                "coefficients": {f"c{i}": coeffs[i] for i in range(6)},
+                "offset": offset
+            }
+        else:
+            instruction = {
+                "operation": "lb",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "mem-type",
+                "offset": offset
+            }
+        
+        if is_function:
+            print(f"Debug - Adding load instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
+            self.functions[self.current_function]["instructions"][self.current_pe].append(instruction)
+        else:
+            print(f"Debug - Adding load instruction to main program for PE {self.current_pe}")  # Debug print
+            self.instruction_template[self.current_pe].append(instruction)
+
+
     def _parse_load(self, line, is_function=False):
         print(f"Debug - Parsing load instruction: '{line}'")  # Debug print
         indices_is_eq = False
@@ -342,10 +436,104 @@ class DSLCompiler:
             print(f"Debug - Adding store instruction to main program for PE {self.current_pe}")  # Debug print
             self.instruction_template[self.current_pe].append(instruction)
 
+    def _parse_storebyte(self, line, is_function=False):
+        print(f"Debug - Parsing store instruction: '{line}'")  # Debug print
+        line = line.replace("storebyte", "").strip()
+        
+        # Split into variable part and offset part
+        parts = line.split(",", 1)
+        var_part = parts[0].strip()
+        offset = int(parts[1].strip()) if len(parts) > 1 else 0
+        
+        # Split variable name and indices
+        var_parts = var_part.split("[", 1)
+        var = var_parts[0].strip()
+        
+        # Check if it's an array or single variable
+        is_array = len(var_parts) > 1
+        indices_is_eq = False
+
+        if is_array:
+            indices = [idx.strip("]") for idx in var_parts[1].split("][")]
+            indices_has_eq = []
+            index_groups = {}  # Dictionary to store index groups
+            group_id = 0  # Counter for group IDs
+            
+            for idx in indices:
+                if '+' in idx:
+                    # Split on '+' and add both parts
+                    parts = idx.split('+')
+                    group_indices = [p.strip() for p in parts]
+                    indices_has_eq.extend(group_indices)
+                    indices_is_eq = True
+                    
+                    # Add all indices in this group to the same group
+                    for group_idx in group_indices:
+                        index_groups[group_idx] = group_id
+                    group_id += 1
+                else:
+                    indices_has_eq.append(idx)
+                    # Single index gets its own group
+                    index_groups[idx] = group_id
+                    group_id += 1
+        else:
+            indices = []
+            indices_has_eq = []
+            index_groups = {}
+        
+        if indices_is_eq:
+            print(f"Debug - Store variable: {var}, indices: {indices_has_eq}, index groups: {index_groups}")  # Debug print
+        else:
+            print(f"Debug - Store variable: {var}, indices: {indices}")  # Debug print
+        
+        # For function parameters, use the parameter name directly
+        if is_function:
+            reg = var
+        else:
+            # For main program variables, use the base register
+            reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
+            
+        if is_array:
+            if indices_is_eq:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            else:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+            
+            instruction = {
+                "operation": "psrf.sb",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "psrf-mem-type",
+                "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
+                "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
+                "coefficients": {f"c{i}": coeffs[i] for i in range(6)},
+                "offset": offset
+            }
+        else:
+            instruction = {
+                "operation": "sb",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "mem-type",
+                "offset": offset
+            }
+        
+        if is_function:
+            print(f"Debug - Adding store instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
+            self.functions[self.current_function]["instructions"][self.current_pe].append(instruction)
+        else:
+            print(f"Debug - Adding store instruction to main program for PE {self.current_pe}")  # Debug print
+            self.instruction_template[self.current_pe].append(instruction)
+
+    
     def _parse_nop(self, line):
         print(f"Debug - Parsing nop instruction: '{line}'")  # Debug print
         instruction = {
-            "operation": "nop",
+            "operation": "NOP",
             "ra1": None,
             "ra2": None,
             "format": "nop-type"
@@ -650,8 +838,12 @@ class DSLCompiler:
                 elif self.current_pe is not None:
                     # Inside main program
                     print(f"Debug - Inside main program, PE: {self.current_pe}")  # Debug print
-                    if line.startswith("load"):
-                        self._parse_load(line)
+                    if line.startswith("loadbyte"):
+                        self._parse_loadbyte(line)
+                    elif line.startswith("load"):
+                        self._parse_load(line)  
+                    elif line.startswith("storebyte"):
+                        self._parse_storebyte(line)
                     elif line.startswith("store"):
                         self._parse_store(line)
                     elif line.startswith("mul") or line.startswith("add"):
