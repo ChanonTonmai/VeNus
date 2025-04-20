@@ -55,7 +55,7 @@ class DSLCompiler:
         var, addr = line.replace("&", "").split("=")
         self.memory_base[var.strip()] = int(addr.strip())
 
-    def parse_declaration(self, line):
+    def parse_declaration_int(self, line):
         # Split the line into variable declaration and index specification
         parts = line.split(",", 1)
         decl_part = parts[0].strip()
@@ -96,7 +96,55 @@ class DSLCompiler:
             "shape": dims,
             "base_reg": reg,
             "var_id": len(self.variable_map),
-            "indices": indices
+            "indices": indices,
+            "data_type": "int"
+        }
+        
+        print(f"Debug - Parsed variable {varname} with shape {dims} and indices {indices}")  # Debug print
+    
+    def parse_declaration_char(self, line):
+        # Split the line into variable declaration and index specification
+        parts = line.split(",", 1)
+        decl_part = parts[0].strip()
+        index_spec = parts[1].strip() if len(parts) > 1 else None
+        
+        # Check if it's an array declaration (contains [])
+        if '[' in decl_part:
+            # Parse array declaration
+            match = re.match(r"char\s+(\w+)\[((?:\d+\]\[)*\d+)\]\s*=>\s*(x\d+)", decl_part)
+            if not match:
+                raise ValueError(f"Invalid array declaration format: {line}")
+            
+            varname, dim_str, reg = match.groups()
+            dims = [int(d) for d in dim_str.split("][")]
+            
+            # Parse the index specification if present
+            indices = []
+            if index_spec:
+                # Remove brackets and split by comma
+                index_spec = index_spec.strip("[]")
+                indices = [idx.strip() for idx in index_spec.split(",")]
+                
+                # Validate that number of indices matches number of dimensions
+                if len(indices) != len(dims):
+                    raise ValueError(f"Number of indices ({len(indices)}) does not match number of dimensions ({len(dims)}) in {line}")
+        else:
+            # Parse single variable declaration
+            match = re.match(r"int\s+(\w+)\s*=>\s*(x\d+)", decl_part)
+            if not match:
+                raise ValueError(f"Invalid variable declaration format: {line}")
+            
+            varname, reg = match.groups()
+            dims = [1]  # Single variable has dimension 1
+            indices = ['0']  # Single variable has index 0
+        
+        # Store the variable information
+        self.variable_map[varname] = {
+            "shape": dims,
+            "base_reg": reg,
+            "var_id": len(self.variable_map),
+            "indices": indices,
+            "data_type": "char"
         }
         
         print(f"Debug - Parsed variable {varname} with shape {dims} and indices {indices}")  # Debug print
@@ -218,10 +266,14 @@ class DSLCompiler:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             
             instruction = {
                 "operation": "psrf.lb",
@@ -312,10 +364,14 @@ class DSLCompiler:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             
             instruction = {
                 "operation": "psrf.lw",
@@ -405,10 +461,14 @@ class DSLCompiler:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             
             instruction = {
                 "operation": "psrf.sw",
@@ -498,10 +558,14 @@ class DSLCompiler:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
                 coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
             
             instruction = {
                 "operation": "psrf.sb",
@@ -533,7 +597,7 @@ class DSLCompiler:
     def _parse_nop(self, line):
         print(f"Debug - Parsing nop instruction: '{line}'")  # Debug print
         instruction = {
-            "operation": "NOP",
+            "operation": "nop",
             "ra1": None,
             "ra2": None,
             "format": "nop-type"
@@ -669,14 +733,17 @@ class DSLCompiler:
             for var, meta in self.variable_map.items():
                 shape = meta["shape"]
                 indices = meta["indices"]
+                data_type = meta["data_type"]
                 if outer_var in ''.join(indices):
                     # Find the position of 'n' in indices
-                    n_pos = indices.index('n') if 'n' in indices else -1
+                    out_pos = indices.index(outer_var) if outer_var in indices else -1
                     # Calculate stride by multiplying all shape elements except the one at n_pos
                     stride = 1
                     for i, dim in enumerate(shape):
-                        if i != n_pos:
+                        if i != out_pos:
                             stride *= dim
+                    if data_type == "int":
+                        stride *= 4
                     reg = meta["base_reg"]
                     self.hardware_config["psrf_mem_offset"][f"{reg}_offset"] = chunk_size * stride
 
@@ -783,14 +850,18 @@ class DSLCompiler:
                 for pe_id in self.pe_pc:
                     self.pe_pc[pe_id] += 0
             elif line.startswith("int"):
-                self.parse_declaration(line)
+                self.parse_declaration_int(line)
+            elif line.startswith("char"):
+                self.parse_declaration_char(line)
             elif line.startswith("&"):
                 self.parse_memory(line)
             elif in_main:
                 if line.startswith("&"):
                     self.parse_memory(line)
                 elif line.startswith("int"):
-                    self.parse_declaration(line)
+                    self.parse_declaration_int(line)    
+                elif line.startswith("char"):
+                    self.parse_declaration_char(line)
                 elif line.startswith("for"):
                     self.parse_loop(line)
                 elif line == "endfor":
