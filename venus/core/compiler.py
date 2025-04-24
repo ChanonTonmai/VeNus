@@ -597,7 +597,7 @@ class DSLCompiler:
     def _parse_nop(self, line):
         print(f"Debug - Parsing nop instruction: '{line}'")  # Debug print
         instruction = {
-            "operation": "nop",
+            "operation": "NOP",
             "ra1": None,
             "ra2": None,
             "format": "nop-type"
