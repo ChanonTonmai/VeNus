@@ -36,7 +36,8 @@ class DSLCompiler:
         self.loop_stack = []  # Stack to track nested loops
         self.nested_loop_pc = None  # Track PC for nested loops
         self.pe_pc = {}  # Dictionary to store PC for each PE
-
+        self.schedule_type = "block"
+        self.outer_loop_count = 0
 
     def parse_pragma(self, line):
         if "total_pes" in line:
@@ -45,6 +46,8 @@ class DSLCompiler:
             self.hardware_config["clusters"]["pes_per_cluster"] = int(line.split("=")[1])
         elif "EMB" in line:
             self.emb_split = int(line.split("=")[1])
+        elif "schedule_type" in line:
+            self.schedule_type = line.split("=")[1] # block or round-robin
         elif "minimum_pes_required" in line:
             self.scheduling["minimum_pes_required"] = int(line.split("=")[1])
             # Initialize PC for each PE after we know minimum_pes_required
@@ -183,6 +186,9 @@ class DSLCompiler:
             "iterations": count if len(self.loop_vars) > 0 else count // self.emb_split,
             "fill": -1
         }
+        
+        if len(self.loop_vars) == 0:
+            self.outer_loop_count = count // self.emb_split
         
         # Add to instruction template for all PEs
         for pe_id in range(self.scheduling["minimum_pes_required"]):
@@ -597,7 +603,7 @@ class DSLCompiler:
     def _parse_nop(self, line):
         print(f"Debug - Parsing nop instruction: '{line}'")  # Debug print
         instruction = {
-            "operation": "NOP",
+            "operation": "nop",
             "ra1": None,
             "ra2": None,
             "format": "nop-type"
@@ -692,6 +698,9 @@ class DSLCompiler:
         # Initialize coefficients list with zeros
         coeffs = [0] * len(indices)
         
+        outer = self.loop_vars[0]
+        outer_var = outer["var"]
+        
         # Get unique group IDs
         unique_groups = set(index_groups.values())
         
@@ -708,6 +717,9 @@ class DSLCompiler:
             coeff = 1
             for i in range(first_pos + 1, len(shape)):
                 coeff *= shape[i]
+                if self.schedule_type == "round-robin":
+                    if outer_var in ''.join(indices):
+                        coeff *= (self.emb_split)
             
             # Assign the same coefficient to all indices in this group
             for idx in group_indices:
@@ -745,7 +757,10 @@ class DSLCompiler:
                     if data_type == "int":
                         stride *= 4
                     reg = meta["base_reg"]
-                    self.hardware_config["psrf_mem_offset"][f"{reg}_offset"] = chunk_size * stride
+                    if self.schedule_type == "round-robin":
+                        self.hardware_config["psrf_mem_offset"][f"{reg}_offset"] = dim * 4
+                    else:   
+                        self.hardware_config["psrf_mem_offset"][f"{reg}_offset"] = chunk_size * stride
 
 
         pe_blocks = []
