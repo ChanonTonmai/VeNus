@@ -11,6 +11,7 @@ class DSLCompiler:
         self.mem_config = {f"x{i}": None for i in range(18, 26)}
         self.hardware_config = {
             "total_pes": 1,
+            "data_dup": 1,
             "clusters": {"count": 1, "pes_per_cluster": 1},
             "psrf_mem_offset": {f"x{i}_offset": None for i in range(18, 26)}
         }
@@ -38,6 +39,8 @@ class DSLCompiler:
         self.pe_pc = {}  # Dictionary to store PC for each PE
         self.schedule_type = "block"
         self.outer_loop_count = 0
+        self.data_dup = 1
+        self.delay_start = [0] * 64  # Initialize delay_start array for up to 64 PEs
 
     def parse_pragma(self, line):
         if "total_pes" in line:
@@ -53,6 +56,21 @@ class DSLCompiler:
             # Initialize PC for each PE after we know minimum_pes_required
             for pe_id in range(self.scheduling["minimum_pes_required"]):
                 self.pe_pc[pe_id] = 0  # Start PC at 2 (after HWL instructions)
+        elif "delay_start" in line:
+            # Parse delay_start pragma
+            delay_str = line.split("=")[1].strip()
+            # Remove brackets and split by comma
+            delay_str = delay_str.strip("[]")
+            delays = [int(d.strip()) for d in delay_str.split(",")]
+            # Update delay_start array
+            self.delay_start = delays  # Replace the entire array instead of updating individual elements
+            print(f"Debug - Parsed delay_start values: {self.delay_start}")  # Debug print
+        elif "data_duplicate" in line:
+            data_dup = int(line.split("=")[1])
+            self.data_dup = data_dup
+            self.hardware_config["data_dup"] = data_dup
+
+
 
     def parse_memory(self, line):
         var, addr = line.replace("&", "").split("=")
@@ -615,9 +633,9 @@ class DSLCompiler:
         if line.startswith("add") or line.startswith("sub") or line.startswith("mul") or line.startswith("div") or \
         line.startswith("sll") or line.startswith("srl") or line.startswith("sra") or line.startswith("xor") or \
         line.startswith("or") or line.startswith("and") or line.startswith("srli") or line.startswith("srai") or \
-        line.startswith("slt") or  line.startwith("slli")  or                                                  \
-        line.startwith("addi") or line.startwith("subi") or line.startwith("slt") or line.startwith("sltu") or \
-        line.startwith("xori") or line.startwith("ori") or line.startwith("andi"): 
+        line.startswith("slt") or  line.startswith("slli")  or                                                  \
+        line.startswith("addi") or line.startswith("subi") or line.startswith("slt") or line.startswith("sltu") or \
+        line.startswith("xori") or line.startswith("ori") or line.startswith("andi"): 
             
             op, args = line.split(" ", 1)
             args = [arg.strip() for arg in args.split(",")]
@@ -653,6 +671,36 @@ class DSLCompiler:
                     "ra2": ra2,
                     "format": "r-type"  
                 }
+            self.instruction_template[self.current_pe].append(instruction)
+        elif line.startswith("b"):
+            op, args = line.split(" ", 1)
+            args = [arg.strip() for arg in args.split(",")]
+
+            if len(args) == 2:
+                rd, ra1 = args
+                ra2 = 0
+            else:
+                rd, ra1, ra2 = args
+            
+            instruction = {
+                    "operation": op.upper(),
+                    "rd": rd,
+                    "ra1": ra1,
+                    "imm": ra2,
+                    "format": "b-type"  
+                }
+            self.instruction_template[self.current_pe].append(instruction)
+        elif line.startswith("jal"):
+            op, args = line.split(" ", 1)
+            args = [arg.strip() for arg in args.split(",")]
+            rd, target = args
+            instruction = {
+                "operation": "jal",
+                "rd": rd,
+                "address": int(target),
+                "imm": int(target),
+                "format": "j-type"
+            }
             self.instruction_template[self.current_pe].append(instruction)
         
     def _parse_function_call(self, line):
@@ -816,6 +864,9 @@ class DSLCompiler:
         # Add functions section if there are any functions
         if function_blocks:
             yaml_output["functions"] = function_blocks
+
+        # Add delay_start to the YAML output
+        yaml_output["delay_start"] = self.delay_start
 
         return yaml_output
 
