@@ -1,6 +1,7 @@
 import yaml
 import math
 import re
+from collections import Counter
 from copy import deepcopy
 import argparse
 import sys
@@ -69,8 +70,6 @@ class DSLCompiler:
             data_dup = int(line.split("=")[1])
             self.data_dup = data_dup
             self.hardware_config["data_dup"] = data_dup
-
-
 
     def parse_memory(self, line):
         var, addr = line.replace("&", "").split("=")
@@ -229,7 +228,7 @@ class DSLCompiler:
             self.nested_loop_pc = self.pc
 
     def _parse_loadbyte(self, line, is_function=False):
-        print(f"Debug - Parsing load instruction: '{line}'")  # Debug print
+        print(f"Debug - Parsing loadbyte instruction: '{line}'")  # Debug print
         indices_is_eq = False
         line = line.replace("loadbyte", "").strip()
         
@@ -245,10 +244,13 @@ class DSLCompiler:
         # Check if it's an array or single variable
         is_array = len(var_parts) > 1
         
+        is_array = len(var_parts) > 1
+        
         if is_array:
             indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
+            number_of_terms = {}
             group_id = 0  # Counter for group IDs
             
             for idx in indices:
@@ -256,17 +258,31 @@ class DSLCompiler:
                     # Split on '+' and add both parts
                     parts = idx.split('+')
                     group_indices = [p.strip() for p in parts]
+                    print(f"Debug - Group indices: {group_indices}")
                     indices_has_eq.extend(group_indices)
                     indices_is_eq = True
                     
+                    freq_dict = Counter(group_indices)
+                    print(f"Debug - Frequency dictionary: {freq_dict}")
+                    has_value_greater_than_one = any(value > 1 for value in freq_dict.values())
+
+                    print(f"Debug - Has value greater than one: {has_value_greater_than_one}")
                     # Add all indices in this group to the same group
                     for group_idx in group_indices:
-                        index_groups[group_idx] = group_id
+                        index_groups[group_idx] = group_id  
+                        if freq_dict[group_idx] > 1:
+                            number_of_terms[group_id] = (freq_dict[group_idx], group_idx)    
+                    
+                    # number of term in each group 
+                    
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                        
                     group_id += 1
                 else:
                     indices_has_eq.append(idx)
                     # Single index gets its own group
                     index_groups[idx] = group_id
+                    print(f"Debug - Number of terms: {number_of_terms}")
                     group_id += 1
         else:
             indices = []
@@ -288,13 +304,13 @@ class DSLCompiler:
         if is_array:
             if indices_is_eq:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
@@ -325,7 +341,6 @@ class DSLCompiler:
             print(f"Debug - Adding load instruction to main program for PE {self.current_pe}")  # Debug print
             self.instruction_template[self.current_pe].append(instruction)
 
-
     def _parse_load(self, line, is_function=False):
         print(f"Debug - Parsing load instruction: '{line}'")  # Debug print
         indices_is_eq = False
@@ -339,6 +354,7 @@ class DSLCompiler:
         # Split variable name and indices
         var_parts = var_part.split("[", 1)
         var = var_parts[0].strip()
+
         
         # Check if it's an array or single variable
         is_array = len(var_parts) > 1
@@ -347,6 +363,7 @@ class DSLCompiler:
             indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
+            number_of_terms = {}
             group_id = 0  # Counter for group IDs
             
             for idx in indices:
@@ -354,17 +371,31 @@ class DSLCompiler:
                     # Split on '+' and add both parts
                     parts = idx.split('+')
                     group_indices = [p.strip() for p in parts]
+                    print(f"Debug - Group indices: {group_indices}")
                     indices_has_eq.extend(group_indices)
                     indices_is_eq = True
                     
+                    freq_dict = Counter(group_indices)
+                    print(f"Debug - Frequency dictionary: {freq_dict}")
+                    has_value_greater_than_one = any(value > 1 for value in freq_dict.values())
+
+                    print(f"Debug - Has value greater than one: {has_value_greater_than_one}")
                     # Add all indices in this group to the same group
                     for group_idx in group_indices:
-                        index_groups[group_idx] = group_id
+                        index_groups[group_idx] = group_id  
+                        if freq_dict[group_idx] > 1:
+                            number_of_terms[group_id] = (freq_dict[group_idx], group_idx)    
+                    
+                    # number of term in each group 
+                    
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                        
                     group_id += 1
                 else:
                     indices_has_eq.append(idx)
                     # Single index gets its own group
                     index_groups[idx] = group_id
+                    print(f"Debug - Number of terms: {number_of_terms}")
                     group_id += 1
         else:
             indices = []
@@ -386,19 +417,132 @@ class DSLCompiler:
         if is_array:
             if indices_is_eq:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
             
             instruction = {
                 "operation": "psrf.lw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "psrf-mem-type",
+                "var": self.variable_map[var]['var_id'] if var in self.variable_map else 0,
+                "psrf_var": {f"v{i}": psrf[i] for i in range(6)},
+                "coefficients": {f"c{i}": coeffs[i] for i in range(6)},
+                "offset": offset
+            }
+        else:
+            instruction = {
+                "operation": "lw",
+                "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
+                "base_address": reg,
+                "format": "mem-type",
+                "offset": offset
+            }
+        
+        if is_function:
+            print(f"Debug - Adding load instruction to function {self.current_function} for PE {self.current_pe}")  # Debug print
+            self.functions[self.current_function]["instructions"][self.current_pe].append(instruction)
+        else:
+            print(f"Debug - Adding load instruction to main program for PE {self.current_pe}")  # Debug print
+            self.instruction_template[self.current_pe].append(instruction)
+
+    def _parse_loadzd(self, line, is_function=False):
+        print(f"Debug - Parsing loadzd instruction: '{line}'")  # Debug print
+        indices_is_eq = False
+        line = line.replace("zdload", "").strip()
+        
+        # Split into variable part and offset part
+        parts = line.split(",", 1)
+        var_part = parts[0].strip()
+        offset = int(parts[1].strip()) if len(parts) > 1 else 0
+        
+        # Split variable name and indices
+        var_parts = var_part.split("[", 1)
+        var = var_parts[0].strip()
+
+        
+        # Check if it's an array or single variable
+        is_array = len(var_parts) > 1
+        
+        if is_array:
+            indices = [idx.strip("]") for idx in var_parts[1].split("][")]
+            indices_has_eq = []
+            index_groups = {}  # Dictionary to store index groups
+            number_of_terms = {}
+            group_id = 0  # Counter for group IDs
+            
+            for idx in indices:
+                if '+' in idx:
+                    # Split on '+' and add both parts
+                    parts = idx.split('+')
+                    group_indices = [p.strip() for p in parts]
+                    print(f"Debug - Group indices: {group_indices}")
+                    indices_has_eq.extend(group_indices)
+                    indices_is_eq = True
+                    
+                    freq_dict = Counter(group_indices)
+                    print(f"Debug - Frequency dictionary: {freq_dict}")
+                    has_value_greater_than_one = any(value > 1 for value in freq_dict.values())
+
+                    print(f"Debug - Has value greater than one: {has_value_greater_than_one}")
+                    # Add all indices in this group to the same group
+                    for group_idx in group_indices:
+                        index_groups[group_idx] = group_id  
+                        if freq_dict[group_idx] > 1:
+                            number_of_terms[group_id] = (freq_dict[group_idx], group_idx)    
+                    
+                    # number of term in each group 
+                    
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                        
+                    group_id += 1
+                else:
+                    indices_has_eq.append(idx)
+                    # Single index gets its own group
+                    index_groups[idx] = group_id
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                    group_id += 1
+        else:
+            indices = []
+            indices_has_eq = []
+            index_groups = {}
+        
+        if indices_is_eq:
+            print(f"Debug - Load variable: {var}, indices: {indices_has_eq}, index groups: {index_groups}")  # Debug print
+        else:
+            print(f"Debug - Load variable: {var}, indices: {indices}")  # Debug print
+        
+        # For function parameters, use the parameter name directly
+        if is_function:
+            reg = var
+        else:
+            # For main program variables, use the base register
+            reg = self.variable_map[var]["base_reg"] if var in self.variable_map else var
+            
+        if is_array:
+            if indices_is_eq:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
+            else:
+                psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
+                coeffs += [0] * (6 - len(coeffs))
+                if self.variable_map[var]["data_type"] == "int":
+                    coeffs = [coeff*4 for coeff in coeffs]
+            
+            instruction = {
+                "operation": "psrf.zd.lw",
                 "ra1": f"x{self.variable_map[var]['var_id'] + 1}" if var in self.variable_map else reg,
                 "base_address": reg,
                 "format": "psrf-mem-type",
@@ -440,10 +584,13 @@ class DSLCompiler:
         is_array = len(var_parts) > 1
         indices_is_eq = False
 
+        is_array = len(var_parts) > 1
+        
         if is_array:
             indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
+            number_of_terms = {}
             group_id = 0  # Counter for group IDs
             
             for idx in indices:
@@ -451,17 +598,31 @@ class DSLCompiler:
                     # Split on '+' and add both parts
                     parts = idx.split('+')
                     group_indices = [p.strip() for p in parts]
+                    print(f"Debug - Group indices: {group_indices}")
                     indices_has_eq.extend(group_indices)
                     indices_is_eq = True
                     
+                    freq_dict = Counter(group_indices)
+                    print(f"Debug - Frequency dictionary: {freq_dict}")
+                    has_value_greater_than_one = any(value > 1 for value in freq_dict.values())
+
+                    print(f"Debug - Has value greater than one: {has_value_greater_than_one}")
                     # Add all indices in this group to the same group
                     for group_idx in group_indices:
-                        index_groups[group_idx] = group_id
+                        index_groups[group_idx] = group_id  
+                        if freq_dict[group_idx] > 1:
+                            number_of_terms[group_id] = (freq_dict[group_idx], group_idx)    
+                    
+                    # number of term in each group 
+                    
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                        
                     group_id += 1
                 else:
                     indices_has_eq.append(idx)
                     # Single index gets its own group
                     index_groups[idx] = group_id
+                    print(f"Debug - Number of terms: {number_of_terms}")
                     group_id += 1
         else:
             indices = []
@@ -483,13 +644,13 @@ class DSLCompiler:
         if is_array:
             if indices_is_eq:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
@@ -520,8 +681,9 @@ class DSLCompiler:
             print(f"Debug - Adding store instruction to main program for PE {self.current_pe}")  # Debug print
             self.instruction_template[self.current_pe].append(instruction)
 
+       
     def _parse_storebyte(self, line, is_function=False):
-        print(f"Debug - Parsing store instruction: '{line}'")  # Debug print
+        print(f"Debug - Parsing storebyte instruction: '{line}'")  # Debug print
         line = line.replace("storebyte", "").strip()
         
         # Split into variable part and offset part
@@ -536,11 +698,11 @@ class DSLCompiler:
         # Check if it's an array or single variable
         is_array = len(var_parts) > 1
         indices_is_eq = False
-
         if is_array:
             indices = [idx.strip("]") for idx in var_parts[1].split("][")]
             indices_has_eq = []
             index_groups = {}  # Dictionary to store index groups
+            number_of_terms = {}
             group_id = 0  # Counter for group IDs
             
             for idx in indices:
@@ -548,17 +710,31 @@ class DSLCompiler:
                     # Split on '+' and add both parts
                     parts = idx.split('+')
                     group_indices = [p.strip() for p in parts]
+                    print(f"Debug - Group indices: {group_indices}")
                     indices_has_eq.extend(group_indices)
                     indices_is_eq = True
                     
+                    freq_dict = Counter(group_indices)
+                    print(f"Debug - Frequency dictionary: {freq_dict}")
+                    has_value_greater_than_one = any(value > 1 for value in freq_dict.values())
+
+                    print(f"Debug - Has value greater than one: {has_value_greater_than_one}")
                     # Add all indices in this group to the same group
                     for group_idx in group_indices:
-                        index_groups[group_idx] = group_id
+                        index_groups[group_idx] = group_id  
+                        if freq_dict[group_idx] > 1:
+                            number_of_terms[group_id] = (freq_dict[group_idx], group_idx)    
+                    
+                    # number of term in each group 
+                    
+                    print(f"Debug - Number of terms: {number_of_terms}")
+                        
                     group_id += 1
                 else:
                     indices_has_eq.append(idx)
                     # Single index gets its own group
                     index_groups[idx] = group_id
+                    print(f"Debug - Number of terms: {number_of_terms}")
                     group_id += 1
         else:
             indices = []
@@ -580,13 +756,13 @@ class DSLCompiler:
         if is_array:
             if indices_is_eq:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices_has_eq] + [0] * (6 - len(indices_has_eq))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices_has_eq, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
             else:
                 psrf = [self.loop_hwl_map[i]["hwl_index"] for i in indices] + [0] * (6 - len(indices))
-                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups) if var in self.variable_map else [0] * 6
+                coeffs = self._calculate_coeffs(self.variable_map[var]["shape"], indices, index_groups, number_of_terms) if var in self.variable_map else [0] * 6
                 coeffs += [0] * (6 - len(coeffs))
                 if self.variable_map[var]["data_type"] == "int":
                     coeffs = [coeff*4 for coeff in coeffs]
@@ -742,21 +918,44 @@ class DSLCompiler:
             stride *= dim
         return strides
     
-    def _calculate_coeffs(self, shape, indices, index_groups):
+    def _calculate_coeffs(self, shape, indices, index_groups, number_of_terms):
         # Initialize coefficients list with zeros
+        print(f"Debug - Number of terms: {number_of_terms}")
+        print(f"Debug - Number of terms values: {number_of_terms.values()}")
+        temp = list(number_of_terms.values())
+        if len(temp) > 0:
+            print(f"Debug - Temp: {temp}")
+            print(f"Debug - Temp values: {temp[0][0]}")
+            tmp = temp[0][0]
+            
+            variable_that_has_multiple_terms = temp[0][1]
+            variable_terms = temp[0][0]
+            if tmp > 1:
+                has_value_greater_than_one = True
+            else:
+                has_value_greater_than_one = False
+        else:
+            has_value_greater_than_one = False
+            variable_that_has_multiple_terms = None
+            variable_terms = None
+
         coeffs = [0] * len(indices)
+        
         
         outer = self.loop_vars[0]
         outer_var = outer["var"]
         
         # Get unique group IDs
         unique_groups = set(index_groups.values())
+        print(f'indices: {indices}')
         
         # For each group, calculate its coefficient
         for group_id in unique_groups:
             # Get all indices in this group
             group_indices = [idx for idx, gid in index_groups.items() if gid == group_id]
-            
+            print(f"Debug - Group indices: {group_indices}")
+            # print(f"Debug - Shape: {shape}")
+            # print(f"Debug - Number of terms: {number_of_terms}")
             # Find the position of the first index in this group
             first_pos = indices.index(group_indices[0])
             
@@ -772,8 +971,19 @@ class DSLCompiler:
             # Assign the same coefficient to all indices in this group
             for idx in group_indices:
                 pos = indices.index(idx)
-                coeffs[pos] = coeff
+                print(f"Debug - idx: {idx}, pos: {pos}")
+                if idx == variable_that_has_multiple_terms:
+                    print(f"Dubug - idx {idx} is the variable that has multiple terms")
+                    # for i in range(variable_terms-1):
+                    #     coeffs.append(coeff)
+                    coeffs[pos] = coeff
+                    # coeffs[-1] = coeff
+                    
+                else:
+                    coeffs[pos] = coeff 
+                print(f"Debug - coeffs: {coeffs}")
         
+        print(f"Debug - Coeffs: {coeffs}")
         return coeffs
 
     def build_yaml(self):
@@ -978,7 +1188,9 @@ class DSLCompiler:
                     if line.startswith("loadbyte"):
                         self._parse_loadbyte(line)
                     elif line.startswith("load"):
-                        self._parse_load(line)  
+                        self._parse_load(line) 
+                    elif line.startswith("zdload"):
+                        self._parse_loadzd(line)   
                     elif line.startswith("storebyte"):
                         self._parse_storebyte(line)
                     elif line.startswith("store"):
@@ -1007,6 +1219,8 @@ class DSLCompiler:
                     elif self.current_pe is not None:
                         if line.startswith("load"):
                             self._parse_load(line, is_function=True)
+                        elif line.startswith("zdload"):
+                            self._parse_loadzd(line, is_function=True)  
                         elif line.startswith("store"):
                             self._parse_store(line, is_function=True)
                         elif line.startswith("mul") or line.startswith("add"):
@@ -1020,6 +1234,8 @@ class DSLCompiler:
                     print(f"Debug - Inside main program, PE: {self.current_pe}")  # Debug print
                     if line.startswith("load"):
                         self._parse_load(line)
+                    elif line.startswith("zdload"):
+                        self._parse_loadzd(line)
                     elif line.startswith("store"):
                         self._parse_store(line)
                     elif line.startswith("mul") or line.startswith("add"):
