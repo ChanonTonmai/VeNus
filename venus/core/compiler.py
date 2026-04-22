@@ -878,6 +878,17 @@ class DSLCompiler:
                 "format": "j-type"
             }
             self.instruction_template[self.current_pe].append(instruction)
+        elif line.startswith("lui"):
+            op, args = line.split(" ", 1)
+            args = [arg.strip() for arg in args.split(",")]
+            rd, imm = args
+            instruction = {
+                "operation": "lui",
+                "rd": rd,
+                "imm": imm,
+                "format": "i-type"
+            }
+            self.instruction_template[self.current_pe].append(instruction)
         
     def _parse_function_call(self, line):
         # Parse function call like "call foo"
